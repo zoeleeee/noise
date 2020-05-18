@@ -15,16 +15,17 @@ class AFT_Net(nn.Module):
         self.nb_layer = 6
 
     def set_layer_id(self, layer_id):
-        self.layer_id == layer_id
-
+        self.layer_id = layer_id
+        print(self.layer_id)
     def forward(self, x):
+        print(self.layer_id)
         layer_id = self.layer_id
         # for i in range(layer_id, nb_layer)
         while self.nb_layer > layer_id:
             if layer_id == 0:
                 x = F.relu(self.conv1(x))
             elif layer_id == 1:
-                x = F.pool1(x)
+                x = self.pool1(x)
             elif layer_id == 2:
                 x = F.relu(self.conv2(x))
             elif layer_id == 3:
@@ -74,7 +75,7 @@ if __name__ == '__main__':
     outs = net(inputs)
     print(outs[-1])
     for i,out in enumerate(outs):
-        aft.set_layer_id(i)
+        aft.set_layer_id(i+1)
         val = aft(out)
-        if not torch.eq(val, outs[-1]):
+        if torch.sum(torch.abs(val-outs[-1])) != 0:
             print(val, outs[-1]-val)
