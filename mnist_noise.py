@@ -131,5 +131,5 @@ if __name__ == '__main__':
     # testloader = 
 
     for i in range(6):
-        train(net, i, aft, rnd, trainloader, 'rnd_'+file)
+        train(net, i, aft, rnd, trainloader, file[:-3]+'_rnd.pt')
 
