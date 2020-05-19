@@ -60,6 +60,55 @@ class Net(nn.Module):
         # x = self.fc3(x)
         return [x0, x1, x2, x3, x4, x5]
 
+def loss_func(preds, target, noise):
+    ce = F.cross_entropy(preds, target)
+    
+    real = torch.sum(preds*target, 1)
+    other = torch.max((1-target)*preds-target*1000, 1)
+    # dp_robust = tf.max(0.0, real-other+)
+    cw = torch.max(0.0, real-other)
+
+    dist = torch.norm(noise)
+    return -1*dist + cw
+
+def train(net, layer_id, aft, rnd, trainloader, path, nb_epoch=100):
+    optimizer = optim.Adam(rnd.parameters(), lr=0.001, momentum=0.9)
+    
+    net.eval()
+    aft.eval()
+    aft.set_layer_id(layer_id+1)
+    
+    for epoch in range(nb_epoch):  # loop over the dataset multiple times
+        running_loss = 0.0
+        for i, data in enumerate(trainloader, 0):
+            # get the inputs; data is a list of [inputs, labels]
+            if torch.cuda.is_available():
+                inputs, labels = data[0].to(device), data[1].to(device)
+            else:
+                inputs, labels = data
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward + backward + optimize
+            outs = net(inputs)
+            noises = rnd(inputs)
+            preds = aft(inputs[layer_id]+noises[layer_id])
+            loss = loss_func(preds, labels, noise[layer_id])
+            loss.backward()
+            optimizer.step()
+
+            # print statistics
+            running_loss += loss.item()
+            # if i % 2000 == 1999:    # print every 2000 mini-batches
+        print('[%d epoch] loss: %.3f' %
+                      (epoch + 1, running_loss / 2000))
+        running_loss = 0.0
+
+    torch.save(rnd.state_dict(), path)
+    print('Finished Training')
+
+
 if __name__ == '__main__':
     import sys
     file = sys.argv[-1]
@@ -67,15 +116,20 @@ if __name__ == '__main__':
     net.load_state_dict(torch.load(file))
     aft = AFT_Net()
     aft.load_state_dict(torch.load(file))
+    rnd = Net()
 
     import numpy as np
     data = np.load('data/mnist_data.npy').astype(np.float32) / 255.
-    inputs = torch.tensor(data[:1])
+    labs = np.load('data/mnist_labels.npy').astyep(np.float32) / 255.
+    labels = np.zeros((len(labs), np.max(labs)+1))
+    for i, l in enumerate(labels):
+        l[labs[i]] = 1
+    print(np.sum(labels))
+    from torch.utils import data
+    my_dataset = data.TensorDataset(torch.tensor(data[:60000]), torch.tensor(labels[:60000].astype(np.int)))
+    trainloader = data.DataLoader(my_dataset, batch_size = 64, shuffle = True)
+    # testloader = 
 
-    outs = net(inputs)
-    print(outs[-1])
-    for i,out in enumerate(outs):
-        aft.set_layer_id(i+1)
-        val = aft(out)
-        if torch.sum(torch.abs(val-outs[-1])) != 0:
-            print(val, outs[-1]-val)
+    for i in range(6):
+        train(net, i, aft, rnd, trainloader, 'rnd_'+file)
+
